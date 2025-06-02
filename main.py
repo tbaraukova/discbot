@@ -176,7 +176,12 @@ await channel.send(f'User {message.author.mention} sent: {message.content}',
             await message.add_reaction('❌')
             await message.reply("Failed to forward your message. Please try again later.")
     else:
-        logger.warning(f"No destination channel configured, message from {message.author.name} not forwarded")
+await message.add_reaction('❌')
+            await message.reply("Failed to forward your message. Please try again later.")
+    else:
+        # import html
+        logger.warning(f"No destination channel configured, message from {html.escape(message.author.name)} not forwarded")
+        await message.reply("Oops... It looks like the bot is not configured yet, so your message cannot be delivered")
         await message.reply("Oops... It looks like the bot is not configured yet, so your message cannot be delivered")
 
 
