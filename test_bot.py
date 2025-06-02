@@ -10,10 +10,11 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 # Mock the discord and flask modules before importing main
 sys.modules['discord'] = MagicMock()
 sys.modules['dotenv'] = MagicMock()
-sys.modules['flask'] = MagicMock()
+flask_mock = MagicMock()
+sys.modules['flask'] = flask_mock
 
 # Now we can import from main
-from main import save_data, get_data, DATA_FILE, info, DiscordBot, bot_status
+from main import save_data, get_data, DATA_FILE, info, DiscordBot, bot_status, app
 
 class TestDiscordBot(unittest.TestCase):
     
@@ -84,6 +85,12 @@ class TestDiscordBot(unittest.TestCase):
         # Test that bot_status has the correct initial values
         self.assertFalse(bot_status["running"])
         self.assertIsNone(bot_status["error"])
+    
+    def test_flask_app_exists(self):
+        # Test that the Flask app is properly defined
+        self.assertIsNotNone(app)
+        # Verify that app is a Flask application (mocked)
+        self.assertTrue(hasattr(app, 'run'))
 
 if __name__ == '__main__':
     unittest.main()

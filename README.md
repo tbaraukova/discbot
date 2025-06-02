@@ -87,12 +87,15 @@ A Discord bot that forwards messages and files from users to a specified channel
    ```
 4. Open the app in your browser and enter your Discord token if not set via environment variables
 
+**Note**: The application uses Gunicorn as the WSGI server when deployed to Heroku. This is configured in the Procfile and requirements.txt.
+
 ## Troubleshooting
 
 - If the bot doesn't start, check that your Discord token is correct
 - If messages aren't being forwarded, make sure you've set a destination channel using `/set_destination`
 - For persistent data storage, ensure the `DATA_DIR` environment variable points to a persistent storage location
 - If the web UI is not accessible, check that port 8080 is not blocked by a firewall
+- If you encounter a Heroku error "No web processes running", make sure the Procfile is correctly configured with `web: gunicorn main:app`
 
 ## Credits
 
