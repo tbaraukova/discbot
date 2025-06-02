@@ -19,7 +19,11 @@ ENV DATA_DIR=/app/data
 
 # Create data directory and set permissions
 RUN mkdir -p /app/data && \
-    chown -R discbot:discbot /app/data
+    mkdir -p /app/templates && \
+    chown -R discbot:discbot /app/data /app/templates
+
+# Expose the web UI port
+EXPOSE 8080
 
 # Switch to non-root user
 USER discbot

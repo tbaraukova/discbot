@@ -7,10 +7,11 @@ A Discord bot that forwards messages and files from users to a specified channel
 - Forwards private messages to a designated channel
 - Supports file attachments and stickers
 - Simple setup with slash commands
+- Web UI for entering Discord token and monitoring bot status
 
 ## Requirements
 
-- Python 3.10 (specifically required for Heroku deployment)
+- Python 3.8+
 - Discord Bot Token
 
 ## Installation
@@ -20,9 +21,23 @@ A Discord bot that forwards messages and files from users to a specified channel
    ```
    pip install -r requirements.txt
    ```
-3. Create a `.env` file with your Discord token (see `.env.example`)
 
 ## Configuration
+
+### Using the Web UI (Recommended)
+
+1. Run the bot:
+   ```
+   python main.py
+   ```
+
+2. Open your browser and navigate to `http://localhost:8080`
+
+3. Enter your Discord token in the web interface and click "Start Bot"
+
+4. In Discord, use the `/set_destination` command in the channel where you want messages to be forwarded.
+
+### Using Environment Variables (Alternative)
 
 1. Create a `.env` file with the following variables:
    ```
@@ -48,7 +63,7 @@ A Discord bot that forwards messages and files from users to a specified channel
 
 2. Run the container:
    ```
-   docker run -d --name discbot -e DISCORD_TOKEN=your_token_here -v /path/to/data:/app/data discbot
+   docker run -d --name discbot -p 8080:8080 -e DISCORD_TOKEN=your_token_here -v /path/to/data:/app/data discbot
    ```
 
 ### Docker Compose
@@ -62,21 +77,22 @@ A Discord bot that forwards messages and files from users to a specified channel
 ### Heroku
 
 1. Create a new Heroku app
-2. Set the environment variables:
+2. Set the environment variables (optional):
    ```
    heroku config:set DISCORD_TOKEN=your_token_here
    ```
-3. The repository includes both `.python-version` and `runtime.txt` files to specify Python 3.10 for Heroku
-4. Deploy the app:
+3. Deploy the app:
    ```
    git push heroku main
    ```
+4. Open the app in your browser and enter your Discord token if not set via environment variables
 
 ## Troubleshooting
 
 - If the bot doesn't start, check that your Discord token is correct
 - If messages aren't being forwarded, make sure you've set a destination channel using `/set_destination`
 - For persistent data storage, ensure the `DATA_DIR` environment variable points to a persistent storage location
+- If the web UI is not accessible, check that port 8080 is not blocked by a firewall
 
 ## Credits
 
