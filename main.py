@@ -5,8 +5,10 @@ import os
 import io
 import sys
 import logging
-import html  # Used to escape HTML entities in user input for safe logging
+import threading
+import html
 from pathlib import Path
+from flask import Flask, render_template, request, redirect, url_for, jsonify
 
 # Configure logging
 logging.basicConfig(
@@ -16,26 +18,123 @@ logging.basicConfig(
 )
 logger = logging.getLogger('discbot')
 
-# Load environment variables
-dotenv.load_dotenv()
-DISCORD_TOKEN = os.getenv('DISCORD_TOKEN')
-if not DISCORD_TOKEN:
-    logger.error("DISCORD_TOKEN environment variable is not set. Please set it and try again.")
-    sys.exit(1)
-
 # Configure data directory - use environment variable or default to current directory
 DATA_DIR = os.getenv('DATA_DIR', os.getcwd())
 DATA_FILE = os.path.join(DATA_DIR, 'data.json')
 
-# Initialize bot with intents
-intents = discord.Intents.default()
-intents.messages = True
-intents.message_content = True
-bot = discord.Bot(intents=intents)
+# Load environment variables (for backward compatibility)
+dotenv.load_dotenv()
 
-admin = discord.Permissions.none() + discord.Permissions.administrator
-no_mentions = discord.AllowedMentions.none()
+# Global variables
 info = {}
+bot_instance = None
+bot_thread = None
+bot_status = {
+    "running": False,
+    "error": None
+}
+
+class DiscordBot:
+    def __init__(self, token):
+        self.token = token
+        self.bot = None
+        self.running = False
+        self.error = None
+        
+        # Initialize bot with intents
+        intents = discord.Intents.default()
+        intents.messages = True
+        intents.message_content = True
+        self.bot = discord.Bot(intents=intents)
+        
+        # Set up bot event handlers
+        self.setup_bot_events()
+    
+    def setup_bot_events(self):
+        admin = discord.Permissions.none() + discord.Permissions.administrator
+        
+        @self.bot.slash_command(name="set_destination", description="Set current channel as forwarding destination",
+                           default_member_permissions=admin)
+        async def set_slash(ctx: discord.ApplicationContext):
+            channel_id = ctx.channel_id
+            info['channel_id'] = channel_id
+            save_data()
+            logger.info("Destination channel set to %s by %s", channel_id, ctx.author)
+            await ctx.respond('This channel was set as forwarding destination')
+        
+        @self.bot.event
+        async def on_ready():
+            logger.info(f"Bot logged in as {self.bot.user}")
+            logger.info(f"Bot ID: {self.bot.user.id}")
+            logger.info(f"Connected to {len(self.bot.guilds)} guilds")
+        
+        @self.bot.event
+        async def on_message(message: discord.Message):
+            await self.forward(message)
+    
+    async def forward(self, message: discord.Message):
+        if message.author == self.bot.user:
+            return
+        if message.guild:
+            return
+        
+        logger.info(f'Forwarding message from {html.escape(message.author.name)} (ID: {message.author.id})')
+        
+        attachments = message.attachments
+        files = []
+        
+        for attachment in attachments:
+            try:
+                f = io.BytesIO(await attachment.read())
+                file = discord.File(f, attachment.filename, description=attachment.description, spoiler=attachment.is_spoiler())
+                files.append(file)
+            except Exception as e:
+                logger.error(f"Failed to process attachment {html.escape(attachment.filename)}: {html.escape(str(e))}")
+        
+        channel_id = info.get('channel_id', 0)
+        channel = self.bot.get_channel(channel_id)
+        
+        if channel is not None:
+            try:
+                await channel.send(f'User {message.author.mention} sent: {message.content}',
+                               allowed_mentions=discord.AllowedMentions.none(), files=files, stickers=message.stickers)
+                await message.add_reaction('✅')
+                logger.info(f"Message from {html.escape(message.author.name)} forwarded successfully")
+            except Exception as e:
+                logger.error(f"Failed to forward message: {html.escape(str(e))}")
+                await message.add_reaction('❌')
+                await message.reply("Failed to forward your message. Please try again later.")
+        else:
+            logger.warning(f"No destination channel configured, message from {html.escape(message.author.name)} not forwarded")
+            await message.reply("Oops... It looks like the bot is not configured yet, so your message cannot be delivered")
+    
+    def start(self):
+        """Start the bot in a non-blocking way"""
+        def run_bot():
+            try:
+                logger.info("Starting Discord bot...")
+                self.running = True
+                self.error = None
+                self.bot.run(self.token, reconnect=True)
+            except discord.errors.LoginFailure:
+                logger.error("Invalid Discord token. Please check your token.")
+                self.error = "Invalid Discord token. Please check your token."
+            except Exception as e:
+                logger.error(f"Error starting bot: {str(e)}")
+                self.error = f"Error starting bot: {str(e)}"
+            finally:
+                self.running = False
+                logger.info("Bot has stopped")
+        
+        return threading.Thread(target=run_bot)
+    
+    def stop(self):
+        """Stop the bot"""
+        if self.running and self.bot:
+            logger.info("Stopping Discord bot...")
+            self.bot.close()
+            return True
+        return False
 
 
 def save_data():
@@ -71,73 +170,206 @@ def get_data():
         logger.error(f"Unexpected error loading configuration: {str(e)}")
 
 
-@bot.slash_command(name="set_destination", description="Set current channel as forwarding destination",
-                   default_member_permissions=admin)
-async def set_slash(ctx: discord.ApplicationContext):
-    channel_id = ctx.channel_id
-    info['channel_id'] = channel_id
-    save_data()
-    logger.info("Destination channel set to %s by %s", channel_id, ctx.author)
-    await ctx.respond('This channel was set as forwarding destination')
+# Create Flask app
+app = Flask(__name__)
 
+# Create templates directory and files
+os.makedirs(os.path.join(os.getcwd(), 'templates'), exist_ok=True)
 
-@bot.event
-async def on_ready():
-    logger.info(f"Bot logged in as {bot.user}")
-    logger.info(f"Bot ID: {bot.user.id}")
-    logger.info(f"Connected to {len(bot.guilds)} guilds")
-
-
-@bot.event
-async def on_message(message: discord.Message):
-    await forward(message)
-
-
-async def forward(message: discord.Message):
-    if message.author == bot.user:
-        return
-    if message.guild:
-        return
+# Create HTML templates
+def create_templates():
+    # Create index.html
+    index_html = """<!DOCTYPE html>
+<html>
+<head>
+    <title>Discord Bot Control Panel</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .container {
+            background-color: #f5f5f5;
+            border-radius: 5px;
+            padding: 20px;
+            margin-top: 20px;
+        }
+        .status {
+            padding: 10px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            font-weight: bold;
+        }
+        .running {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        .stopped {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+        .error {
+            background-color: #f8d7da;
+            color: #721c24;
+            padding: 10px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+        input[type="text"] {
+            width: 100%;
+            padding: 10px;
+            margin: 10px 0;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 15px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        button.stop {
+            background-color: #f44336;
+        }
+        button:hover {
+            opacity: 0.8;
+        }
+    </style>
+</head>
+<body>
+    <h1>Discord Bot Control Panel</h1>
     
-    logger.info(f'Forwarding message from {html.escape(message.author.name)} (ID: {message.author.id})')
+    <div class="container">
+        <h2>Bot Status</h2>
+        {% if status.running %}
+            <div class="status running">Bot is RUNNING</div>
+        {% else %}
+            <div class="status stopped">Bot is STOPPED</div>
+        {% endif %}
+        
+        {% if status.error %}
+            <div class="error">Error: {{ status.error }}</div>
+        {% endif %}
+        
+        {% if status.running %}
+            <form action="/stop" method="post">
+                <button type="submit" class="stop">Stop Bot</button>
+            </form>
+        {% else %}
+            <h2>Start Bot</h2>
+            <form action="/start" method="post">
+                <label for="token">Discord Token:</label>
+                <input type="text" id="token" name="token" placeholder="Enter your Discord token" required>
+                <button type="submit">Start Bot</button>
+            </form>
+        {% endif %}
+    </div>
+</body>
+</html>"""
     
-    attachments = message.attachments
-    files = []
-    
-    for attachment in attachments:
-        try:
-            f = io.BytesIO(await attachment.read())
-            file = discord.File(f, attachment.filename, description=attachment.description, spoiler=attachment.is_spoiler())
-            files.append(file)
-        except Exception as e:
-            logger.error(f"Failed to process attachment {html.escape(attachment.filename)}: {html.escape(str(e))}")
-    
-    channel_id = info.get('channel_id', 0)
-    channel = bot.get_channel(channel_id)
-    
-    if channel is not None:
-        try:
-            await channel.send(f'User {message.author.mention} sent: {message.content}',
-                           allowed_mentions=no_mentions, files=files, stickers=message.stickers)
-            await message.add_reaction('✅')
-            logger.info(f"Message from {html.escape(message.author.name)} forwarded successfully")
-        except Exception as e:
-            logger.error(f"Failed to forward message: {html.escape(str(e))}")
-            await message.add_reaction('❌')
-            await message.reply("Failed to forward your message. Please try again later.")
-    else:
-        logger.warning(f"No destination channel configured, message from {html.escape(message.author.name)} not forwarded")
-        await message.reply("Oops... It looks like the bot is not configured yet, so your message cannot be delivered")
+    with open(os.path.join(os.getcwd(), 'templates', 'index.html'), 'w') as f:
+        f.write(index_html)
 
 
-get_data()
+# Flask routes
+@app.route('/')
+def index():
+    global bot_status
+    if bot_instance:
+        bot_status["running"] = bot_instance.running
+        bot_status["error"] = bot_instance.error
+    return render_template('index.html', status=bot_status)
 
-try:
-    logger.info("Starting Discord bot...")
-    bot.run(DISCORD_TOKEN, reconnect=True)
-except discord.errors.LoginFailure:
-    logger.error("Invalid Discord token. Please check your DISCORD_TOKEN environment variable.")
-    sys.exit(1)
-except Exception as e:
-    logger.error(f"Error starting bot: {str(e)}")
-    sys.exit(1)
+
+@app.route('/start', methods=['POST'])
+def start_bot():
+    global bot_instance, bot_thread, bot_status
+    
+    token = request.form.get('token')
+    if not token:
+        bot_status["error"] = "No token provided"
+        return redirect(url_for('index'))
+    
+    # Stop existing bot if running
+    if bot_instance and bot_instance.running:
+        bot_instance.stop()
+        if bot_thread and bot_thread.is_alive():
+            bot_thread.join(timeout=5)
+    
+    # Create and start new bot
+    try:
+        bot_instance = DiscordBot(token)
+        bot_thread = bot_instance.start()
+        bot_thread.daemon = True  # Make thread exit when main thread exits
+        bot_thread.start()
+        
+        # Update status
+        bot_status["running"] = True
+        bot_status["error"] = None
+        
+        # Wait a bit to catch immediate errors
+        import time
+        time.sleep(2)
+        
+        # Check if bot is still running
+        if not bot_instance.running:
+            bot_status["error"] = bot_instance.error
+    except Exception as e:
+        bot_status["error"] = str(e)
+    
+    return redirect(url_for('index'))
+
+
+@app.route('/stop', methods=['POST'])
+def stop_bot():
+    global bot_instance, bot_status
+    
+    if bot_instance:
+        bot_instance.stop()
+        bot_status["running"] = False
+    
+    return redirect(url_for('index'))
+
+
+@app.route('/status', methods=['GET'])
+def get_status():
+    global bot_status
+    if bot_instance:
+        bot_status["running"] = bot_instance.running
+        bot_status["error"] = bot_instance.error
+    return jsonify(bot_status)
+
+
+def main():
+    # Load configuration data
+    get_data()
+    
+    # Create templates
+    create_templates()
+    
+    # Check if token is provided as environment variable (for backward compatibility)
+    token = os.getenv('DISCORD_TOKEN')
+    if token:
+        logger.info("Discord token found in environment variables. Starting bot automatically.")
+        global bot_instance, bot_thread, bot_status
+        
+        bot_instance = DiscordBot(token)
+        bot_thread = bot_instance.start()
+        bot_thread.daemon = True
+        bot_thread.start()
+        
+        # Update status
+        bot_status["running"] = True
+    
+    # Start Flask app
+    app.run(host='0.0.0.0', port=int(os.getenv('PORT', 8080)), debug=False)
+
+
+if __name__ == '__main__':
+    main()

@@ -3,6 +3,8 @@ version: '3'
 services:
   discbot:
     build: .
+    ports:
+      - "8080:8080"
     volumes:
       - ./data:/app/data
     environment:
