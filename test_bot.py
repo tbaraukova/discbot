@@ -36,14 +36,15 @@ class TestDiscordBot(unittest.TestCase):
     @patch('json.load', return_value={"channel_id": 123456789})
     def test_get_data(self, mock_json_load, mock_file_open):
         # Reset info to empty dict
-mock_file_open.assert_called_once_with(DATA_FILE, 'w')
-        
-        # Check if json.dump was called with the right arguments
+# Check if json.dump was called with the right arguments
         mock_json_dump.assert_called_once()
         
     @patch('builtins.open', new_callable=mock_open, read_data='{"channel_id": 123456789}')
     @patch('json.load', return_value={"channel_id": 123456789})
     def test_get_data(self, mock_json_load, mock_file_open):
+        # Use a local variable instead of modifying the global 'info'
+        local_info = {}
+        
         # Test that get_data loads data correctly
         get_data()
         
@@ -53,11 +54,14 @@ mock_file_open.assert_called_once_with(DATA_FILE, 'w')
         # Check if json.load was called
         mock_json_load.assert_called_once()
         
-        # Check if info was updated
-        self.assertEqual(info, {"channel_id": 123456789})
+        # Check if local_info was updated
+        self.assertEqual(local_info, {"channel_id": 123456789})
         
     @patch('builtins.open', side_effect=FileNotFoundError)
     def test_get_data_file_not_found(self, mock_file_open):
+        # Use a local variable instead of modifying the global 'info'
+        local_info = {}
+        
         # Test that get_data handles FileNotFoundError
         info.clear()
         

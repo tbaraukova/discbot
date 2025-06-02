@@ -10,7 +10,7 @@ A Discord bot that forwards messages and files from users to a specified channel
 
 ## Requirements
 
-- Python 3.8+
+- Python 3.10 (specifically required for Heroku deployment)
 - Discord Bot Token
 
 ## Installation
@@ -66,7 +66,8 @@ A Discord bot that forwards messages and files from users to a specified channel
    ```
    heroku config:set DISCORD_TOKEN=your_token_here
    ```
-3. Deploy the app:
+3. The repository includes both `.python-version` and `runtime.txt` files to specify Python 3.10 for Heroku
+4. Deploy the app:
    ```
    git push heroku main
    ```
