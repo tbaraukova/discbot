@@ -113,6 +113,12 @@ class TestDiscordBot(unittest.TestCase):
     def test_token_input_is_password_type(self):
         # Test that the token input field is of type "password" for security
         self.assertIn('input type="password" id="token" name="token"', INDEX_HTML_TEMPLATE)
+    
+    def test_deployment_id_in_template(self):
+        # Test that the deploymentId is included in the index.html template
+        self.assertIn('Deployment ID: {{ status.deploymentId }}', INDEX_HTML_TEMPLATE)
+        # Test that there's a CSS class for styling the deployment info
+        self.assertIn('.deployment-info', INDEX_HTML_TEMPLATE)
 
 if __name__ == '__main__':
     unittest.main()

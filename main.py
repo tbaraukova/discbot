@@ -258,6 +258,14 @@ INDEX_HTML_TEMPLATE = """<!DOCTYPE html>
         button:hover {
             opacity: 0.8;
         }
+        .deployment-info {
+            font-size: 12px;
+            color: #666;
+            text-align: center;
+            margin-top: 20px;
+            padding-top: 10px;
+            border-top: 1px solid #ddd;
+        }
     </style>
 </head>
 <body>
@@ -287,6 +295,10 @@ INDEX_HTML_TEMPLATE = """<!DOCTYPE html>
                 <button type="submit">Start Bot</button>
             </form>
         {% endif %}
+    </div>
+    
+    <div class="deployment-info">
+        Deployment ID: {{ status.deploymentId }}
     </div>
 </body>
 </html>"""
