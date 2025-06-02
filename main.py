@@ -72,7 +72,15 @@ async def set_slash(ctx: discord.ApplicationContext):
     channel_id = ctx.channel_id
     info['channel_id'] = channel_id
     save_data()
-    logger.info(f"Destination channel set to {channel_id} by {ctx.author}")
+# Import logging to use its built-in sanitization features
+import logging
+
+async def set_slash(ctx: discord.ApplicationContext):
+    channel_id = ctx.channel_id
+    info['channel_id'] = channel_id
+    save_data()
+    logger.info("Destination channel set to %s by %s", channel_id, ctx.author)
+    await ctx.respond('This channel was set as forwarding destination')
     await ctx.respond('This channel was set as forwarding destination')
 
 
