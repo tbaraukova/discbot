@@ -260,7 +260,7 @@ INDEX_HTML_TEMPLATE = """<!DOCTYPE html>
             <h2>Start Bot</h2>
             <form action="/start" method="post">
                 <label for="token">Discord Token:</label>
-                <input type="text" id="token" name="token" placeholder="Enter your Discord token" required>
+                <input type="password" id="token" name="token" placeholder="Enter your Discord token" required>
                 <button type="submit">Start Bot</button>
             </form>
         {% endif %}

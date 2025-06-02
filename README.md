@@ -8,6 +8,7 @@ A Discord bot that forwards messages and files from users to a specified channel
 - Supports file attachments and stickers
 - Simple setup with slash commands
 - Web UI for entering Discord token and monitoring bot status
+- Secure token handling with password field masking
 
 ## Requirements
 
@@ -34,6 +35,7 @@ A Discord bot that forwards messages and files from users to a specified channel
 2. Open your browser and navigate to `http://localhost:8080`
 
 3. Enter your Discord token in the web interface and click "Start Bot"
+   (Your token will be securely masked as you type)
 
 4. In Discord, use the `/set_destination` command in the channel where you want messages to be forwarded.
 
