@@ -1,6 +1,7 @@
 import unittest
 import os
 import json
+import re
 from unittest.mock import patch, MagicMock, mock_open
 import sys
 
@@ -85,6 +86,15 @@ class TestDiscordBot(unittest.TestCase):
         # Test that bot_status has the correct initial values
         self.assertFalse(bot_status["running"])
         self.assertIsNone(bot_status["error"])
+        
+    def test_bot_status_has_deployment_id(self):
+        # Test that bot_status has a deploymentId property
+        self.assertIn("deploymentId", bot_status)
+        # Test that deploymentId is a string
+        self.assertIsInstance(bot_status["deploymentId"], str)
+        # Test that deploymentId is a valid UUID
+        uuid_pattern = re.compile(r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$')
+        self.assertTrue(uuid_pattern.match(bot_status["deploymentId"]))
     
     def test_flask_app_exists(self):
         # Test that the Flask app is properly defined
