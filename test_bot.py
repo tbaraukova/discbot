@@ -99,6 +99,10 @@ class TestDiscordBot(unittest.TestCase):
         self.assertIn('Discord Bot Control Panel', INDEX_HTML_TEMPLATE)
         self.assertIn('{% if status.running %}', INDEX_HTML_TEMPLATE)
         self.assertIn('{% if status.error %}', INDEX_HTML_TEMPLATE)
+        
+    def test_token_input_is_password_type(self):
+        # Test that the token input field is of type "password" for security
+        self.assertIn('input type="password" id="token" name="token"', INDEX_HTML_TEMPLATE)
 
 if __name__ == '__main__':
     unittest.main()
