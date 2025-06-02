@@ -101,4 +101,4 @@ A Discord bot that forwards messages and files from users to a specified channel
 
 ## Credits
 
-Thanks Alex for the original idea
+Thanks Alex for the original idea and Irine @mamaicode for the 1st version.
