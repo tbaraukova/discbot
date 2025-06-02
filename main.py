@@ -5,6 +5,7 @@ import os
 import io
 import sys
 import logging
+import html  # Used to escape HTML entities in user input for safe logging
 from pathlib import Path
 
 # Configure logging
@@ -45,19 +46,12 @@ def save_data():
         with open(DATA_FILE, 'w') as f:
             json.dump(info, f, indent=4)
         logger.info(f"Configuration saved to {DATA_FILE}")
-with open(DATA_FILE, 'w') as f:
-            json.dump(info, f, indent=4)
-        logger.info(f"Configuration saved to {DATA_FILE}")
     except PermissionError as e:
         logger.error(f"Permission denied when saving configuration data: {str(e)}")
     except IOError as e:
         logger.error(f"I/O error occurred when saving configuration data: {str(e)}")
     except Exception as e:
         logger.error(f"Unexpected error when saving configuration data: {str(e)}")
-
-
-def get_data():
-        logger.error(f"Failed to save configuration data: {str(e)}")
 
 
 def get_data():
@@ -83,15 +77,7 @@ async def set_slash(ctx: discord.ApplicationContext):
     channel_id = ctx.channel_id
     info['channel_id'] = channel_id
     save_data()
-# Import logging to use its built-in sanitization features
-import logging
-
-async def set_slash(ctx: discord.ApplicationContext):
-    channel_id = ctx.channel_id
-    info['channel_id'] = channel_id
-    save_data()
     logger.info("Destination channel set to %s by %s", channel_id, ctx.author)
-    await ctx.respond('This channel was set as forwarding destination')
     await ctx.respond('This channel was set as forwarding destination')
 
 
@@ -106,14 +92,6 @@ async def on_ready():
 async def on_message(message: discord.Message):
     await forward(message)
 
-
-async def forward(message: discord.Message):
-    if message.author == bot.user:
-        return
-    if message.guild:
-        return
-    
-# import html  # Used to escape HTML entities in user input for safe logging
 
 async def forward(message: discord.Message):
     if message.author == bot.user:
@@ -139,7 +117,7 @@ async def forward(message: discord.Message):
     
     if channel is not None:
         try:
-            await channel.send(f'User {message.author.mention} sent: {html.escape(message.content)}',
+            await channel.send(f'User {message.author.mention} sent: {message.content}',
                            allowed_mentions=no_mentions, files=files, stickers=message.stickers)
             await message.add_reaction('✅')
             logger.info(f"Message from {html.escape(message.author.name)} forwarded successfully")
@@ -149,93 +127,6 @@ async def forward(message: discord.Message):
             await message.reply("Failed to forward your message. Please try again later.")
     else:
         logger.warning(f"No destination channel configured, message from {html.escape(message.author.name)} not forwarded")
-        await message.reply("Oops... It looks like the bot is not configured yet, so your message cannot be delivered")
-    
-    attachments = message.attachments
-    files = []
-    
-attachments = message.attachments
-    files = []
-    
-    # Import asyncio for concurrent processing
-    import asyncio
-    
-    async def process_attachment(attachment):
-        try:
-            f = io.BytesIO(await attachment.read())
-            return discord.File(f, attachment.filename, description=attachment.description, spoiler=attachment.is_spoiler())
-        except Exception as e:
-            logger.error(f"Failed to process attachment {attachment.filename}: {str(e)}")
-            return None
-
-    # Process attachments concurrently
-    processed_files = await asyncio.gather(*[process_attachment(attachment) for attachment in attachments])
-    files = [file for file in processed_files if file is not None]
-    
-    channel_id = info.get('channel_id', 0)
-    channel = bot.get_channel(channel_id)
-        try:
-            f = io.BytesIO(await attachment.read())
-            file = discord.File(f, attachment.filename, description=attachment.description, spoiler=attachment.is_spoiler())
-            files.append(file)
-        except Exception as e:
-for attachment in attachments:
-        try:
-            f = io.BytesIO(await attachment.read())
-            file = discord.File(f, attachment.filename, description=attachment.description, spoiler=attachment.is_spoiler())
-            files.append(file)
-        except Exception as e:
-            # import html
-            logger.error(f"Failed to process attachment {html.escape(attachment.filename)}: {html.escape(str(e))}")
-    
-    channel_id = info.get('channel_id', 0)
-    channel = bot.get_channel(channel_id)
-    
-    if channel is not None:
-        try:
-            await channel.send(f'User {message.author.mention} sent: {message.content}',
-                           allowed_mentions=no_mentions, files=files, stickers=message.stickers)
-            await message.add_reaction('✅')
-            logger.info(f"Message from {message.author.name} forwarded successfully")
-        except Exception as e:
-            logger.error(f"Failed to forward message: {html.escape(str(e))}")
-            await message.add_reaction('❌')
-            await message.reply("Failed to forward your message. Please try again later.")
-    else:
-        logger.warning(f"No destination channel configured, message from {message.author.name} not forwarded")
-        await message.reply("Oops... It looks like the bot is not configured yet, so your message cannot be delivered")
-    
-    channel_id = info.get('channel_id', 0)
-    channel = bot.get_channel(channel_id)
-    
-    if channel is not None:
-        try:
-            await channel.send(f'User {message.author.mention} sent: {message.content}',
-                           allowed_mentions=no_mentions, files=files, stickers=message.stickers)
-            await message.add_reaction('✅')
-await channel.send(f'User {message.author.mention} sent: {message.content}',
-                           allowed_mentions=no_mentions, files=files, stickers=message.stickers)
-            await message.add_reaction('✅')
-            # import html
-            logger.info(f"Message from {html.escape(message.author.name)} forwarded successfully")  # Sanitize user input before logging
-        except Exception as e:
-            logger.error(f"Failed to forward message: {str(e)}")
-            await message.add_reaction('❌')
-            await message.reply("Failed to forward your message. Please try again later.")
-    else:
-        logger.warning(f"No destination channel configured, message from {html.escape(message.author.name)} not forwarded")
-        await message.reply("Oops... It looks like the bot is not configured yet, so your message cannot be delivered")
-        except Exception as e:
-            logger.error(f"Failed to forward message: {str(e)}")
-            await message.add_reaction('❌')
-            await message.reply("Failed to forward your message. Please try again later.")
-    else:
-await message.add_reaction('❌')
-            await message.reply("Failed to forward your message. Please try again later.")
-    else:
-        # import html
-        logger.warning(f"No destination channel configured, message from {html.escape(message.author.name)} not forwarded")
-        await message.reply("Oops... It looks like the bot is not configured yet, so your message cannot be delivered")
         await message.reply("Oops... It looks like the bot is not configured yet, so your message cannot be delivered")
 
 
