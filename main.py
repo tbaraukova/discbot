@@ -46,8 +46,8 @@ bot_config = {
 # Set the deployment ID in the status
 bot_config["status"]["deploymentId"] = bot_config["deployment_id"]
 
-class DiscordBot:
-    def __init__(self, token):
+# Global variables for bot instance and status
+info = {}  # Stores bot configuration information
 bot_instance = None
 bot_thread = None
 deployment_id = str(uuid.uuid4())  # Generate a UUID for this deployment
