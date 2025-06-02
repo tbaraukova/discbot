@@ -45,7 +45,18 @@ def save_data():
         with open(DATA_FILE, 'w') as f:
             json.dump(info, f, indent=4)
         logger.info(f"Configuration saved to {DATA_FILE}")
+with open(DATA_FILE, 'w') as f:
+            json.dump(info, f, indent=4)
+        logger.info(f"Configuration saved to {DATA_FILE}")
+    except PermissionError as e:
+        logger.error(f"Permission denied when saving configuration data: {str(e)}")
+    except IOError as e:
+        logger.error(f"I/O error occurred when saving configuration data: {str(e)}")
     except Exception as e:
+        logger.error(f"Unexpected error when saving configuration data: {str(e)}")
+
+
+def get_data():
         logger.error(f"Failed to save configuration data: {str(e)}")
 
 
