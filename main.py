@@ -154,7 +154,26 @@ async def forward(message: discord.Message):
     attachments = message.attachments
     files = []
     
-    for attachment in attachments:
+attachments = message.attachments
+    files = []
+    
+    # Import asyncio for concurrent processing
+    import asyncio
+    
+    async def process_attachment(attachment):
+        try:
+            f = io.BytesIO(await attachment.read())
+            return discord.File(f, attachment.filename, description=attachment.description, spoiler=attachment.is_spoiler())
+        except Exception as e:
+            logger.error(f"Failed to process attachment {attachment.filename}: {str(e)}")
+            return None
+
+    # Process attachments concurrently
+    processed_files = await asyncio.gather(*[process_attachment(attachment) for attachment in attachments])
+    files = [file for file in processed_files if file is not None]
+    
+    channel_id = info.get('channel_id', 0)
+    channel = bot.get_channel(channel_id)
         try:
             f = io.BytesIO(await attachment.read())
             file = discord.File(f, attachment.filename, description=attachment.description, spoiler=attachment.is_spoiler())
