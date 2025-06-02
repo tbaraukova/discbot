@@ -123,7 +123,18 @@ async def forward(message: discord.Message):
             await channel.send(f'User {message.author.mention} sent: {message.content}',
                            allowed_mentions=no_mentions, files=files, stickers=message.stickers)
             await message.add_reaction('✅')
-            logger.info(f"Message from {message.author.name} forwarded successfully")
+await channel.send(f'User {message.author.mention} sent: {message.content}',
+                           allowed_mentions=no_mentions, files=files, stickers=message.stickers)
+            await message.add_reaction('✅')
+            # import html
+            logger.info(f"Message from {html.escape(message.author.name)} forwarded successfully")  # Sanitize user input before logging
+        except Exception as e:
+            logger.error(f"Failed to forward message: {str(e)}")
+            await message.add_reaction('❌')
+            await message.reply("Failed to forward your message. Please try again later.")
+    else:
+        logger.warning(f"No destination channel configured, message from {html.escape(message.author.name)} not forwarded")
+        await message.reply("Oops... It looks like the bot is not configured yet, so your message cannot be delivered")
         except Exception as e:
             logger.error(f"Failed to forward message: {str(e)}")
             await message.add_reaction('❌')
