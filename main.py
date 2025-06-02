@@ -102,7 +102,43 @@ async def forward(message: discord.Message):
     if message.guild:
         return
     
-    logger.info(f'Forwarding message from {message.author.name} (ID: {message.author.id})')
+# import html  # Used to escape HTML entities in user input for safe logging
+
+async def forward(message: discord.Message):
+    if message.author == bot.user:
+        return
+    if message.guild:
+        return
+    
+    logger.info(f'Forwarding message from {html.escape(message.author.name)} (ID: {message.author.id})')
+    
+    attachments = message.attachments
+    files = []
+    
+    for attachment in attachments:
+        try:
+            f = io.BytesIO(await attachment.read())
+            file = discord.File(f, attachment.filename, description=attachment.description, spoiler=attachment.is_spoiler())
+            files.append(file)
+        except Exception as e:
+            logger.error(f"Failed to process attachment {html.escape(attachment.filename)}: {html.escape(str(e))}")
+    
+    channel_id = info.get('channel_id', 0)
+    channel = bot.get_channel(channel_id)
+    
+    if channel is not None:
+        try:
+            await channel.send(f'User {message.author.mention} sent: {html.escape(message.content)}',
+                           allowed_mentions=no_mentions, files=files, stickers=message.stickers)
+            await message.add_reaction('✅')
+            logger.info(f"Message from {html.escape(message.author.name)} forwarded successfully")
+        except Exception as e:
+            logger.error(f"Failed to forward message: {html.escape(str(e))}")
+            await message.add_reaction('❌')
+            await message.reply("Failed to forward your message. Please try again later.")
+    else:
+        logger.warning(f"No destination channel configured, message from {html.escape(message.author.name)} not forwarded")
+        await message.reply("Oops... It looks like the bot is not configured yet, so your message cannot be delivered")
     
     attachments = message.attachments
     files = []
