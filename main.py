@@ -27,7 +27,27 @@ DATA_FILE = os.path.join(DATA_DIR, 'data.json')
 dotenv.load_dotenv()
 
 # Global variables
-info = {}
+dotenv.load_dotenv()
+
+# Global variables
+# Bot configuration and status
+bot_config = {
+    "info": {},  # Stores bot configuration information
+    "instance": None,  # Holds the DiscordBot instance
+    "thread": None,  # Holds the bot thread
+    "deployment_id": str(uuid.uuid4()),  # Unique identifier for this deployment
+    "status": {
+        "running": False,
+        "error": None,
+        "deploymentId": None  # Will be set to deployment_id
+    }
+}
+
+# Set the deployment ID in the status
+bot_config["status"]["deploymentId"] = bot_config["deployment_id"]
+
+class DiscordBot:
+    def __init__(self, token):
 bot_instance = None
 bot_thread = None
 deployment_id = str(uuid.uuid4())  # Generate a UUID for this deployment
