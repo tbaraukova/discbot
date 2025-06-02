@@ -1,0 +1,10 @@
+version: '3'
+
+services:
+  discbot:
+    build: .
+    volumes:
+      - ./data:/app/data
+    environment:
+      - DISCORD_TOKEN=${DISCORD_TOKEN}
+    restart: unless-stopped
