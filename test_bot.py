@@ -14,7 +14,7 @@ flask_mock = MagicMock()
 sys.modules['flask'] = flask_mock
 
 # Now we can import from main
-from main import save_data, get_data, DATA_FILE, info, DiscordBot, bot_status, app
+from main import save_data, get_data, DATA_FILE, info, DiscordBot, bot_status, app, INDEX_HTML_TEMPLATE
 
 class TestDiscordBot(unittest.TestCase):
     
@@ -91,6 +91,14 @@ class TestDiscordBot(unittest.TestCase):
         self.assertIsNotNone(app)
         # Verify that app is a Flask application (mocked)
         self.assertTrue(hasattr(app, 'run'))
+        
+    def test_index_html_template_exists(self):
+        # Test that the INDEX_HTML_TEMPLATE is properly defined
+        self.assertIsNotNone(INDEX_HTML_TEMPLATE)
+        # Verify that it contains expected content
+        self.assertIn('Discord Bot Control Panel', INDEX_HTML_TEMPLATE)
+        self.assertIn('{% if status.running %}', INDEX_HTML_TEMPLATE)
+        self.assertIn('{% if status.error %}', INDEX_HTML_TEMPLATE)
 
 if __name__ == '__main__':
     unittest.main()

@@ -8,7 +8,7 @@ import logging
 import threading
 import html
 from pathlib import Path
-from flask import Flask, render_template, request, redirect, url_for, jsonify
+from flask import Flask, render_template, render_template_string, request, redirect, url_for, jsonify
 
 # Configure logging
 logging.basicConfig(
@@ -173,13 +173,8 @@ def get_data():
 # Create Flask app
 app = Flask(__name__)
 
-# Create templates directory and files
-os.makedirs(os.path.join(os.getcwd(), 'templates'), exist_ok=True)
-
-# Create HTML templates
-def create_templates():
-    # Create index.html
-    index_html = """<!DOCTYPE html>
+# Define the index.html template as a string
+INDEX_HTML_TEMPLATE = """<!DOCTYPE html>
 <html>
 <head>
     <title>Discord Bot Control Panel</title>
@@ -272,9 +267,12 @@ def create_templates():
     </div>
 </body>
 </html>"""
-    
-    with open(os.path.join(os.getcwd(), 'templates', 'index.html'), 'w') as f:
-        f.write(index_html)
+
+# Create templates function (no longer creates files)
+def create_templates():
+    # This function is kept for backward compatibility
+    # but no longer creates any files
+    pass
 
 
 # Flask routes
@@ -284,7 +282,7 @@ def index():
     if bot_instance:
         bot_status["running"] = bot_instance.running
         bot_status["error"] = bot_instance.error
-    return render_template('index.html', status=bot_status)
+    return render_template_string(INDEX_HTML_TEMPLATE, status=bot_status)
 
 
 @app.route('/start', methods=['POST'])
