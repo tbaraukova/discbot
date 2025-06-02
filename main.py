@@ -7,6 +7,7 @@ import sys
 import logging
 import threading
 import html
+import uuid
 from pathlib import Path
 from flask import Flask, render_template, render_template_string, request, redirect, url_for, jsonify
 
@@ -29,9 +30,11 @@ dotenv.load_dotenv()
 info = {}
 bot_instance = None
 bot_thread = None
+deployment_id = str(uuid.uuid4())  # Generate a UUID for this deployment
 bot_status = {
     "running": False,
-    "error": None
+    "error": None,
+    "deploymentId": deployment_id
 }
 
 class DiscordBot:
