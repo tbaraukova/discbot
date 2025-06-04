@@ -607,7 +607,29 @@ def main():
     token = os.getenv('DISCORD_TOKEN')
     if token:
         logger.info("Discord token found in environment variables. Starting bot automatically.")
-        global bot_instance, bot_thread, bot_status, last_token
+token = os.getenv('DISCORD_TOKEN')
+    if token:
+        logger.info("Discord token found in environment variables. Starting bot automatically.")
+        # Use server-side session data for role validation
+        if is_authorized_user():  # import auth_service
+            global bot_instance, bot_thread, bot_status, last_token
+            
+            # Store the token for potential restart
+            last_token = token
+            save_data()
+            
+            bot_instance = DiscordBot(token)
+            bot_thread = bot_instance.start()
+            bot_thread.daemon = True
+            bot_thread.start()
+            
+            # Update status
+            bot_status["running"] = True
+        else:
+            logger.warning("Unauthorized access attempt detected")
+    
+    # Start Flask app
+    app.run(host='0.0.0.0', port=int(os.getenv('PORT', 8080)), debug=False)
         
         # Store the token for potential restart
         last_token = token
