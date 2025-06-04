@@ -467,7 +467,42 @@ def get_status():
 
 def check_bot_status():
     """Check if the bot is running and restart it if needed."""
-    global bot_instance, bot_thread, bot_status, manually_terminated, last_token
+def check_bot_status():
+    """Check if the bot is running and restart it if needed."""
+    # import threading
+    # Threading module is used to safely access and modify shared variables across threads.
+    
+    with threading.Lock():
+        if not bot_instance or not last_token:
+            return
+        
+        if not bot_instance.running and not manually_terminated:
+            logger.warning("Bot is not running and was not manually terminated. Attempting to restart...")
+            
+            try:
+                if bot_instance:
+                    bot_instance.stop()
+                    if bot_thread and bot_thread.is_alive():
+                        bot_thread.join(timeout=5)
+                
+                bot_instance = DiscordBot(last_token)
+                bot_thread = bot_instance.start()
+                bot_thread.daemon = True
+                bot_thread.start()
+                
+                bot_status["running"] = True
+                bot_status["error"] = None
+                
+                logger.info("Bot restarted successfully")
+                
+                time.sleep(2)
+                
+                if not bot_instance.running:
+                    bot_status["error"] = bot_instance.error
+                    logger.error(f"Bot failed to restart: {bot_instance.error}")
+            except Exception as e:
+                bot_status["error"] = str(e)
+                logger.error(f"Error restarting bot: {str(e)}")
     
     # If there's no bot instance or no last token, we can't restart
     if not bot_instance or not last_token:
