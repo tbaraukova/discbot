@@ -577,7 +577,13 @@ def start_watchdog():
             try:
                 check_bot_status()
             except Exception as e:
-                logger.error(f"Error in watchdog loop: {str(e)}")
+try:
+                check_bot_status()
+            except Exception as e:
+                logger.exception("Error in watchdog loop")
+            
+            # Sleep for the specified interval
+            time.sleep(watchdog_interval)
             
             # Sleep for the specified interval
             time.sleep(watchdog_interval)
