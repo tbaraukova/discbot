@@ -192,7 +192,26 @@ def save_data():
 
 def get_data():
     """Load bot configuration data from the configured data file."""
-    global info, last_token
+# import os
+# import hashlib
+def get_data():
+    """Load bot configuration data from the configured data file."""
+    try:
+        with open(DATA_FILE, 'r') as f:
+            value = json.load(f)
+            if value:
+                # Extract the token if it exists
+                if 'last_token' in value:
+                    last_token = hashlib.sha256(value['last_token'].encode()).hexdigest()
+                info = value
+                logger.info(f"Configuration loaded from {DATA_FILE}")
+    except json.decoder.JSONDecodeError:
+        logger.error(f"JSONDecodeError: file data is too short or file is empty: {DATA_FILE}")
+    except FileNotFoundError:
+        logger.warning(f"FileNotFoundError: {DATA_FILE} not found, using default configuration")
+    except Exception as e:
+        logger.error(f"Unexpected error loading configuration: {str(e)}")
+    return info, last_token
     try:
         with open(DATA_FILE, 'r') as f:
             value = json.load(f)
