@@ -339,7 +339,47 @@ def index():
 
 @app.route('/start', methods=['POST'])
 def start_bot():
-    global bot_instance, bot_thread, bot_status, manually_terminated, last_token
+# Import session management library
+# Flask-Session provides server-side session management for Flask applications
+from flask_session import Session
+
+def start_bot():
+    # Remove global variables and use session for storing bot-related data
+    token = request.form.get('token')
+    if not token:
+        session['bot_status'] = {"error": "No token provided"}
+        return redirect(url_for('index'))
+    
+    # Store the token in the session
+    session['last_token'] = token
+    
+    # Stop existing bot if running
+    if 'bot_instance' in session and session['bot_instance'].running:
+        session['bot_instance'].stop()
+    
+    # Create and start new bot
+    try:
+        bot_instance = DiscordBot(token)
+        bot_thread = bot_instance.start()
+        bot_thread.daemon = True  # Make thread exit when main thread exits
+        bot_thread.start()
+        
+        # Update status in session
+        session['bot_status'] = {"running": True, "error": None}
+        session['bot_instance'] = bot_instance
+        session['manually_terminated'] = False
+        
+        # Wait a bit to catch immediate errors
+        import time
+        time.sleep(2)
+        
+        # Check if bot is still running
+        if not bot_instance.running:
+            session['bot_status']["error"] = bot_instance.error
+    except Exception as e:
+        session['bot_status'] = {"error": str(e)}
+    
+    return redirect(url_for('index'))
     
     token = request.form.get('token')
     if not token:
