@@ -8,6 +8,7 @@ import logging
 import threading
 import html
 import uuid
+import time
 from pathlib import Path
 from flask import Flask, render_template, render_template_string, request, redirect, url_for, jsonify
 
@@ -56,6 +57,12 @@ bot_status = {
     "error": None,
     "deploymentId": deployment_id
 }
+
+# Variables for bot restart logic
+manually_terminated = False  # Flag to track if the bot was manually stopped via GUI
+last_token = None  # Store the last token used to start the bot
+watchdog_thread = None  # Thread for the watchdog that monitors bot status
+watchdog_interval = 60  # Check bot status every 60 seconds
 
 class DiscordBot:
     def __init__(self, token):
@@ -166,7 +173,14 @@ def save_data():
         # Ensure the directory exists
         os.makedirs(os.path.dirname(DATA_FILE), exist_ok=True)
         with open(DATA_FILE, 'w') as f:
-            json.dump(info, f, indent=4)
+            # Don't save the token in the info dictionary directly
+            # Instead, save it separately in a secure way
+            data_to_save = info.copy()
+            if last_token:
+                # In a production environment, you might want to encrypt the token
+                # For this implementation, we'll store it as is
+                data_to_save['last_token'] = last_token
+            json.dump(data_to_save, f, indent=4)
         logger.info(f"Configuration saved to {DATA_FILE}")
     except PermissionError as e:
         logger.error(f"Permission denied when saving configuration data: {str(e)}")
@@ -178,11 +192,33 @@ def save_data():
 
 def get_data():
     """Load bot configuration data from the configured data file."""
-    global info
+# import os
+# import hashlib
+def get_data():
+    """Load bot configuration data from the configured data file."""
     try:
         with open(DATA_FILE, 'r') as f:
             value = json.load(f)
             if value:
+                # Extract the token if it exists
+                if 'last_token' in value:
+                    last_token = hashlib.sha256(value['last_token'].encode()).hexdigest()
+                info = value
+                logger.info(f"Configuration loaded from {DATA_FILE}")
+    except json.decoder.JSONDecodeError:
+        logger.error(f"JSONDecodeError: file data is too short or file is empty: {DATA_FILE}")
+    except FileNotFoundError:
+        logger.warning(f"FileNotFoundError: {DATA_FILE} not found, using default configuration")
+    except Exception as e:
+        logger.error(f"Unexpected error loading configuration: {str(e)}")
+    return info, last_token
+    try:
+        with open(DATA_FILE, 'r') as f:
+            value = json.load(f)
+            if value:
+                # Extract the token if it exists
+                if 'last_token' in value:
+                    last_token = value.pop('last_token')
                 info = value
                 logger.info(f"Configuration loaded from {DATA_FILE}")
     except json.decoder.JSONDecodeError:
@@ -322,12 +358,56 @@ def index():
 
 @app.route('/start', methods=['POST'])
 def start_bot():
-    global bot_instance, bot_thread, bot_status
+# Import session management library
+# Flask-Session provides server-side session management for Flask applications
+from flask_session import Session
+
+def start_bot():
+    # Remove global variables and use session for storing bot-related data
+    token = request.form.get('token')
+    if not token:
+        session['bot_status'] = {"error": "No token provided"}
+        return redirect(url_for('index'))
+    
+    # Store the token in the session
+    session['last_token'] = token
+    
+    # Stop existing bot if running
+    if 'bot_instance' in session and session['bot_instance'].running:
+        session['bot_instance'].stop()
+    
+    # Create and start new bot
+    try:
+        bot_instance = DiscordBot(token)
+        bot_thread = bot_instance.start()
+        bot_thread.daemon = True  # Make thread exit when main thread exits
+        bot_thread.start()
+        
+        # Update status in session
+        session['bot_status'] = {"running": True, "error": None}
+        session['bot_instance'] = bot_instance
+        session['manually_terminated'] = False
+        
+        # Wait a bit to catch immediate errors
+        import time
+        time.sleep(2)
+        
+        # Check if bot is still running
+        if not bot_instance.running:
+            session['bot_status']["error"] = bot_instance.error
+    except Exception as e:
+        session['bot_status'] = {"error": str(e)}
+    
+    return redirect(url_for('index'))
     
     token = request.form.get('token')
     if not token:
         bot_status["error"] = "No token provided"
         return redirect(url_for('index'))
+    
+    # Store the token for potential restart
+    last_token = token
+    save_data()  # Save the token to the data file
     
     # Stop existing bot if running
     if bot_instance and bot_instance.running:
@@ -346,6 +426,9 @@ def start_bot():
         bot_status["running"] = True
         bot_status["error"] = None
         
+        # Clear the manually terminated flag since we're starting the bot
+        manually_terminated = False
+        
         # Wait a bit to catch immediate errors
         import time
         time.sleep(2)
@@ -361,11 +444,33 @@ def start_bot():
 
 @app.route('/stop', methods=['POST'])
 def stop_bot():
-    global bot_instance, bot_status
+# Import session management library
+from flask import session
+
+def stop_bot():
+    # Verify user role using server-side session data
+    if session.get('user_role') == 'admin':
+        global bot_instance, bot_status, manually_terminated
+        
+        if bot_instance:
+            bot_instance.stop()
+            bot_status["running"] = False
+            
+            # Set the manually terminated flag to prevent auto-restart
+            manually_terminated = True
+            logger.info("Bot manually terminated via GUI")
+        
+        return redirect(url_for('index'))
+    else:
+        return "Unauthorized", 403
     
     if bot_instance:
         bot_instance.stop()
         bot_status["running"] = False
+        
+        # Set the manually terminated flag to prevent auto-restart
+        manually_terminated = True
+        logger.info("Bot manually terminated via GUI")
     
     return redirect(url_for('index'))
 
@@ -379,18 +484,218 @@ def get_status():
     return jsonify(bot_status)
 
 
+def check_bot_status():
+    """Check if the bot is running and restart it if needed."""
+def check_bot_status():
+    """Check if the bot is running and restart it if needed."""
+    # import threading
+    # Threading module is used to safely access and modify shared variables across threads.
+    
+    with threading.Lock():
+        if not bot_instance or not last_token:
+            return
+        
+        if not bot_instance.running and not manually_terminated:
+            logger.warning("Bot is not running and was not manually terminated. Attempting to restart...")
+            
+            try:
+                if bot_instance:
+                    bot_instance.stop()
+                    if bot_thread and bot_thread.is_alive():
+                        bot_thread.join(timeout=5)
+                
+                bot_instance = DiscordBot(last_token)
+                bot_thread = bot_instance.start()
+                bot_thread.daemon = True
+                bot_thread.start()
+                
+                bot_status["running"] = True
+                bot_status["error"] = None
+                
+                logger.info("Bot restarted successfully")
+                
+                time.sleep(2)
+                
+                if not bot_instance.running:
+                    bot_status["error"] = bot_instance.error
+                    logger.error(f"Bot failed to restart: {bot_instance.error}")
+            except Exception as e:
+                bot_status["error"] = str(e)
+                logger.error(f"Error restarting bot: {str(e)}")
+    
+    # If there's no bot instance or no last token, we can't restart
+    if not bot_instance or not last_token:
+        return
+    
+    # Check if the bot is running
+    if not bot_instance.running and not manually_terminated:
+        logger.warning("Bot is not running and was not manually terminated. Attempting to restart...")
+        
+        try:
+            # Stop the existing bot instance if it's still around
+            if bot_instance:
+                bot_instance.stop()
+                if bot_thread and bot_thread.is_alive():
+                    bot_thread.join(timeout=5)
+            
+            # Create and start a new bot instance
+            bot_instance = DiscordBot(last_token)
+            bot_thread = bot_instance.start()
+            bot_thread.daemon = True
+            bot_thread.start()
+            
+            # Update status
+            bot_status["running"] = True
+            bot_status["error"] = None
+            
+            logger.info("Bot restarted successfully")
+            
+            # Wait a bit to catch immediate errors
+            time.sleep(2)
+            
+            # Check if bot is still running after restart
+            if not bot_instance.running:
+                bot_status["error"] = bot_instance.error
+# Check if bot is still running after restart
+            if not bot_instance.running:
+                bot_status["error"] = bot_instance.error
+                # import html
+                logger.error(f"Bot failed to restart: {html.escape(str(bot_instance.error))}")
+        except Exception as e:
+            bot_status["error"] = str(e)
+            # import html
+            logger.error(f"Error restarting bot: {html.escape(str(e))}")
+        except Exception as e:
+            bot_status["error"] = str(e)
+            logger.error(f"Error restarting bot: {str(e)}")
+
+
+def start_watchdog():
+    """Start the watchdog thread that monitors the bot status."""
+    def watchdog_loop():
+        while True:
+            try:
+                check_bot_status()
+            except Exception as e:
+try:
+                check_bot_status()
+            except Exception as e:
+                logger.exception("Error in watchdog loop")
+            
+            # Sleep for the specified interval
+            time.sleep(watchdog_interval)
+            
+            # Sleep for the specified interval
+            time.sleep(watchdog_interval)
+    
+    # Create and start the watchdog thread
+    watchdog = threading.Thread(target=watchdog_loop)
+    watchdog.daemon = True  # Make thread exit when main thread exits
+    watchdog.start()
+    
+    return watchdog
+
+
 def main():
+    try:
+        # Load configuration data
+        get_data()
+        
+        # Create templates
+        create_templates()
+        
+        # Start the watchdog thread to monitor bot status
+        global watchdog_thread
+        watchdog_thread = start_watchdog()
+        logger.info("Bot watchdog started")
+        
+        # Check if token is provided as environment variable (for backward compatibility)
+        token = os.getenv('DISCORD_TOKEN')
+        if token:
+            logger.info("Discord token found in environment variables. Starting bot automatically.")
+            global bot_instance, bot_thread, bot_status, last_token
+            
+            # Store the token for potential restart
+            last_token = token
+            save_data()
+            
+            bot_instance = DiscordBot(token)
+            bot_thread = bot_instance.start()
+            bot_thread.daemon = True
+            bot_thread.start()
+            
+            # Update status
+            bot_status["running"] = True
+        
+        # Start Flask app
+        app.run(host='0.0.0.0', port=int(os.getenv('PORT', 8080)), debug=False)
+    except Exception as e:
+        logger.error(f"Unexpected error in main function: {str(e)}")
+
+
+if __name__ == '__main__':
     # Load configuration data
     get_data()
     
     # Create templates
     create_templates()
     
+    # Start the watchdog thread to monitor bot status
+# Create templates
+    create_templates()
+    
+    # Start the watchdog thread to monitor bot status
+    # import threading
+    watchdog_thread = start_watchdog()
+    logger.info("Bot watchdog started")
+    
     # Check if token is provided as environment variable (for backward compatibility)
     token = os.getenv('DISCORD_TOKEN')
     if token:
         logger.info("Discord token found in environment variables. Starting bot automatically.")
-        global bot_instance, bot_thread, bot_status
+        # import threading
+        bot_instance = None
+        bot_thread = None
+        bot_status = {"running": False}
+        last_token = ""
+        
+        # Store the token for potential restart
+        last_token = token
+        save_data()
+    watchdog_thread = start_watchdog()
+    logger.info("Bot watchdog started")
+    
+    # Check if token is provided as environment variable (for backward compatibility)
+    token = os.getenv('DISCORD_TOKEN')
+    if token:
+        logger.info("Discord token found in environment variables. Starting bot automatically.")
+token = os.getenv('DISCORD_TOKEN')
+    if token:
+        logger.info("Discord token found in environment variables. Starting bot automatically.")
+        # Use server-side session data for role validation
+        if is_authorized_user():  # import auth_service
+            global bot_instance, bot_thread, bot_status, last_token
+            
+            # Store the token for potential restart
+            last_token = token
+            save_data()
+            
+            bot_instance = DiscordBot(token)
+            bot_thread = bot_instance.start()
+            bot_thread.daemon = True
+            bot_thread.start()
+            
+            # Update status
+            bot_status["running"] = True
+        else:
+            logger.warning("Unauthorized access attempt detected")
+    
+    # Start Flask app
+    app.run(host='0.0.0.0', port=int(os.getenv('PORT', 8080)), debug=False)
+        
+        # Store the token for potential restart
+        last_token = token
+        save_data()
         
         bot_instance = DiscordBot(token)
         bot_thread = bot_instance.start()
