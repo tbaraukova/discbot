@@ -425,7 +425,25 @@ def start_bot():
 
 @app.route('/stop', methods=['POST'])
 def stop_bot():
-    global bot_instance, bot_status, manually_terminated
+# Import session management library
+from flask import session
+
+def stop_bot():
+    # Verify user role using server-side session data
+    if session.get('user_role') == 'admin':
+        global bot_instance, bot_status, manually_terminated
+        
+        if bot_instance:
+            bot_instance.stop()
+            bot_status["running"] = False
+            
+            # Set the manually terminated flag to prevent auto-restart
+            manually_terminated = True
+            logger.info("Bot manually terminated via GUI")
+        
+        return redirect(url_for('index'))
+    else:
+        return "Unauthorized", 403
     
     if bot_instance:
         bot_instance.stop()
