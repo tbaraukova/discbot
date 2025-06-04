@@ -23,7 +23,15 @@ class TestDiscordBot(unittest.TestCase):
     
     def setUp(self):
         # Reset global variables before each test
-        global manually_terminated, last_token
+class TestDiscordBot(unittest.TestCase):
+    
+    def setUp(self):
+        # Reset instance variables before each test
+        self.manually_terminated = False
+        self.last_token = None
+    
+    @patch('builtins.open', new_callable=mock_open)
+    @patch('json.dump')
         manually_terminated = False
         last_token = None
     
