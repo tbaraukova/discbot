@@ -478,7 +478,27 @@ def main():
     create_templates()
     
     # Start the watchdog thread to monitor bot status
-    global watchdog_thread
+# Create templates
+    create_templates()
+    
+    # Start the watchdog thread to monitor bot status
+    # import threading
+    watchdog_thread = start_watchdog()
+    logger.info("Bot watchdog started")
+    
+    # Check if token is provided as environment variable (for backward compatibility)
+    token = os.getenv('DISCORD_TOKEN')
+    if token:
+        logger.info("Discord token found in environment variables. Starting bot automatically.")
+        # import threading
+        bot_instance = None
+        bot_thread = None
+        bot_status = {"running": False}
+        last_token = ""
+        
+        # Store the token for potential restart
+        last_token = token
+        save_data()
     watchdog_thread = start_watchdog()
     logger.info("Bot watchdog started")
     
