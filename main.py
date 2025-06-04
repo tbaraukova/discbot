@@ -444,7 +444,15 @@ def check_bot_status():
             # Check if bot is still running after restart
             if not bot_instance.running:
                 bot_status["error"] = bot_instance.error
-                logger.error(f"Bot failed to restart: {bot_instance.error}")
+# Check if bot is still running after restart
+            if not bot_instance.running:
+                bot_status["error"] = bot_instance.error
+                # import html
+                logger.error(f"Bot failed to restart: {html.escape(str(bot_instance.error))}")
+        except Exception as e:
+            bot_status["error"] = str(e)
+            # import html
+            logger.error(f"Error restarting bot: {html.escape(str(e))}")
         except Exception as e:
             bot_status["error"] = str(e)
             logger.error(f"Error restarting bot: {str(e)}")
