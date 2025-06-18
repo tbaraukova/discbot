@@ -2,8 +2,10 @@ import unittest
 import os
 import json
 import re
-from unittest.mock import patch, MagicMock, mock_open
+from unittest.mock import patch, MagicMock, mock_open, call
 import sys
+import threading
+import time
 
 # Add the current directory to the path so we can import main
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
@@ -16,8 +18,15 @@ sys.modules['flask'] = flask_mock
 
 # Now we can import from main
 from main import save_data, get_data, DATA_FILE, info, DiscordBot, bot_status, app, INDEX_HTML_TEMPLATE
+from main import check_bot_health, start_watchdog
 
 class TestDiscordBot(unittest.TestCase):
+    
+    def setUp(self):
+        # Reset info to empty dict before each test
+        global info
+        info.clear()
+        info['manually_stopped'] = False
     
     @patch('builtins.open', new_callable=mock_open)
     @patch('json.dump')
@@ -35,8 +44,8 @@ class TestDiscordBot(unittest.TestCase):
         # Check if json.dump was called with the right arguments
         mock_json_dump.assert_called_once()
         
-    @patch('builtins.open', new_callable=mock_open, read_data='{"channel_id": 123456789}')
-    @patch('json.load', return_value={"channel_id": 123456789})
+    @patch('builtins.open', new_callable=mock_open, read_data='{"channel_id": 123456789, "token": "test_token", "manually_stopped": false}')
+    @patch('json.load', return_value={"channel_id": 123456789, "token": "test_token", "manually_stopped": False})
     def test_get_data(self, mock_json_load, mock_file_open):
         # Reset info to empty dict
         global info
@@ -52,7 +61,7 @@ class TestDiscordBot(unittest.TestCase):
         mock_json_load.assert_called_once()
         
         # Check if info was updated
-        self.assertEqual(info, {"channel_id": 123456789})
+        self.assertEqual(info, {"channel_id": 123456789, "token": "test_token", "manually_stopped": False})
         
     @patch('builtins.open', side_effect=FileNotFoundError)
     def test_get_data_file_not_found(self, mock_file_open):
@@ -63,8 +72,8 @@ class TestDiscordBot(unittest.TestCase):
         # Test that get_data handles FileNotFoundError
         get_data()
         
-        # Check if info remains empty
-        self.assertEqual(info, {})
+        # Check if manually_stopped is initialized to False
+        self.assertEqual(info.get('manually_stopped'), False)
     
     def test_discord_bot_init(self):
         # Test that DiscordBot initializes correctly
@@ -119,6 +128,89 @@ class TestDiscordBot(unittest.TestCase):
         self.assertIn('Deployment ID: {{ status.deploymentId }}', INDEX_HTML_TEMPLATE)
         # Test that there's a CSS class for styling the deployment info
         self.assertIn('.deployment-info', INDEX_HTML_TEMPLATE)
+    
+    @patch('main.bot_instance')
+    @patch('main.bot_thread')
+    @patch('main.bot_status')
+    @patch('main.logger')
+    def test_check_bot_health_bot_running(self, mock_logger, mock_status, mock_thread, mock_bot):
+        # Setup
+        global info
+        info['token'] = 'test_token'
+        info['manually_stopped'] = False
+        mock_bot.running = True
+        
+        # Call the function
+        check_bot_health()
+        
+        # Verify
+        mock_logger.info.assert_called_with("Checking bot health...")
+        # Bot is running, so no restart should happen
+        mock_bot.stop.assert_not_called()
+    
+    @patch('main.DiscordBot')
+    @patch('main.bot_instance')
+    @patch('main.bot_thread')
+    @patch('main.bot_status')
+    @patch('main.logger')
+    def test_check_bot_health_bot_not_running_restart(self, mock_logger, mock_status, mock_thread, mock_bot, mock_discord_bot):
+        # Setup
+        global info
+        info['token'] = 'test_token'
+        info['manually_stopped'] = False
+        mock_bot.running = False
+        mock_discord_bot_instance = MagicMock()
+        mock_discord_bot_instance.running = True
+        mock_discord_bot.return_value = mock_discord_bot_instance
+        mock_thread_instance = MagicMock()
+        mock_discord_bot_instance.start.return_value = mock_thread_instance
+        
+        # Call the function
+        check_bot_health()
+        
+        # Verify
+        mock_logger.info.assert_any_call("Checking bot health...")
+        mock_logger.warning.assert_called_with("Bot is not running and wasn't manually stopped. Attempting to restart...")
+        mock_discord_bot.assert_called_with('test_token')
+        mock_discord_bot_instance.start.assert_called_once()
+        mock_thread_instance.start.assert_called_once()
+        mock_logger.info.assert_any_call("Bot restarted successfully")
+    
+    @patch('main.DiscordBot')
+    @patch('main.bot_instance')
+    @patch('main.bot_thread')
+    @patch('main.bot_status')
+    @patch('main.logger')
+    def test_check_bot_health_bot_manually_stopped(self, mock_logger, mock_status, mock_thread, mock_bot, mock_discord_bot):
+        # Setup
+        global info
+        info['token'] = 'test_token'
+        info['manually_stopped'] = True
+        mock_bot.running = False
+        
+        # Call the function
+        check_bot_health()
+        
+        # Verify
+        mock_logger.info.assert_called_with("Checking bot health...")
+        # Bot was manually stopped, so no restart should happen
+        mock_discord_bot.assert_not_called()
+    
+    @patch('threading.Thread')
+    @patch('main.logger')
+    def test_start_watchdog(self, mock_logger, mock_thread):
+        # Setup
+        mock_thread_instance = MagicMock()
+        mock_thread.return_value = mock_thread_instance
+        
+        # Call the function
+        result = start_watchdog()
+        
+        # Verify
+        mock_thread.assert_called_once()
+        mock_thread_instance.start.assert_called_once()
+        mock_logger.info.assert_called_with("Watchdog thread started")
+        self.assertEqual(result, mock_thread_instance)
 
 if __name__ == '__main__':
     unittest.main()
